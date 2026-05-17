@@ -1,0 +1,260 @@
+{
+  "name": "Multi-Agent Research System V3",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "v3-001",
+      "name": "Chat Trigger",
+      "webhookId": "9f4a2c37-b8e1-4d3f-a6c2-7e9b5f082743"
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $input.item.json.chatInput || '';\nif (!query || query.trim().length < 3) {\n  return { json: { query: 'general research', valid: true } };\n}\nreturn { json: { query: query.trim(), valid: true } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "v3-002",
+      "name": "Validate Input"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the Orchestrator Agent. Analyze this research request: \"{{ $json.query }}\"\n\nRespond with ONLY this JSON and nothing else:\n{\"main_topic\": \"exact topic\", \"aspect_1\": \"first research angle\", \"aspect_2\": \"latest news angle\", \"aspect_3\": \"competitive market angle\", \"research_type\": \"mixed\"}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [440, 0],
+      "id": "v3-003",
+      "name": "Orchestrator Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [440, 200],
+      "id": "v3-004",
+      "name": "Gemini — Orchestrator",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json.text || '';\nconst query = $('Validate Input').item.json.query;\n\nlet plan = {};\ntry {\n  let clean = raw.trim();\n  if (clean.includes('```json')) clean = clean.split('```json')[1].split('```')[0].trim();\n  else if (clean.includes('```')) clean = clean.split('```')[1].split('```')[0].trim();\n  const match = clean.match(/\\{[\\s\\S]*\\}/);\n  if (match) plan = JSON.parse(match[0]);\n} catch(e) { plan = {}; }\n\nreturn {\n  json: {\n    original_query: query,\n    main_topic: plan.main_topic || query,\n    aspect_1: plan.aspect_1 || 'overview and key facts',\n    aspect_2: plan.aspect_2 || 'latest news and developments',\n    aspect_3: plan.aspect_3 || 'competitive landscape and trends',\n    research_type: plan.research_type || 'mixed'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "v3-005",
+      "name": "Parse Plan"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the Search Agent — a deep research specialist.\n\nResearch topic: {{ $json.main_topic }}\nFocus area: {{ $json.aspect_1 }}\n\nProvide comprehensive research with these exact sections:\n\nCORE FACTS:\nList the most important factual information with specific numbers and dates.\n\nKEY STATISTICS:\nProvide specific statistics, market data and percentages.\n\nBACKGROUND AND CONTEXT:\nExplain the history, context and current state in detail.\n\nTECHNICAL DETAILS:\nAny technical specifications or frameworks relevant to this topic.\n\nWrite at least 300 words. Be specific and factual.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [880, 0],
+      "id": "v3-006",
+      "name": "Search Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [880, 200],
+      "id": "v3-007",
+      "name": "Gemini — Search",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const searchText = $input.item.json.text || 'No search data available';\nconst prev = $('Parse Plan').item.json;\nreturn {\n  json: {\n    original_query: prev.original_query,\n    main_topic: prev.main_topic,\n    aspect_2: prev.aspect_2,\n    aspect_3: prev.aspect_3,\n    search_findings: searchText\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "id": "v3-008",
+      "name": "Store Search Data"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the News Agent — specialized in current events and latest developments.\n\nTopic: {{ $json.main_topic }}\nFocus area: {{ $json.aspect_2 }}\n\nProvide a comprehensive news briefing with these exact sections:\n\nTOP HEADLINES:\nList 5 major recent news stories or developments from 2024 to 2025.\n\nBREAKING DEVELOPMENTS:\nWhat changed most recently? Key announcements and events.\n\nIMPACT ANALYSIS:\nHow do these developments affect the industry, market or users?\n\nWHAT TO WATCH:\n3 to 4 upcoming events or decisions people should monitor.\n\nOVERALL SENTIMENT:\nPositive, negative or mixed? Why?\n\nWrite at least 250 words. Be specific with dates and events.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [1320, 0],
+      "id": "v3-009",
+      "name": "News Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [1320, 200],
+      "id": "v3-010",
+      "name": "Gemini — News",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const newsText = $input.item.json.text || 'No news data available';\nconst prev = $('Store Search Data').item.json;\nreturn {\n  json: {\n    original_query: prev.original_query,\n    main_topic: prev.main_topic,\n    aspect_3: prev.aspect_3,\n    search_findings: prev.search_findings,\n    news_findings: newsText\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "id": "v3-011",
+      "name": "Store News Data"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the Competitor and Trend Agent — a market intelligence specialist.\n\nTopic: {{ $json.main_topic }}\nFocus area: {{ $json.aspect_3 }}\n\nProvide deep competitive and trend analysis with these exact sections:\n\nMARKET LANDSCAPE:\nTop 5 to 7 players in this space and what each is known for.\n\nCOMPETITIVE ADVANTAGES:\nWhat makes each major player unique and what is their competitive moat.\n\nTOP 7 MARKET TRENDS:\nMajor trends shaping this market right now in 2025.\n\nMARKET SIZE AND GROWTH:\nEstimated market size, growth rate and future projections.\n\nOPPORTUNITIES AND GAPS:\nWhere are the biggest gaps and opportunities in this market.\n\nTHREATS AND DISRUPTIONS:\nWhat could disrupt this market and what are the biggest risks.\n\nWINNER PREDICTION:\nWhich player or approach is best positioned to win and why.\n\nWrite at least 300 words. Be specific with company names and numbers.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [1760, 0],
+      "id": "v3-012",
+      "name": "Competitor Trend Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [1760, 200],
+      "id": "v3-013",
+      "name": "Gemini — Competitor",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const competitorText = $input.item.json.text || 'No competitor data available';\nconst prev = $('Store News Data').item.json;\nreturn {\n  json: {\n    original_query: prev.original_query,\n    main_topic: prev.main_topic,\n    search_findings: prev.search_findings,\n    news_findings: prev.news_findings,\n    competitor_findings: competitorText\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 0],
+      "id": "v3-014",
+      "name": "Collect All Research"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the Chief Analyst Agent. Synthesize all research into a comprehensive report.\n\nORIGINAL REQUEST: {{ $json.original_query }}\nTOPIC: {{ $json.main_topic }}\n\nSEARCH AGENT FINDINGS:\n{{ $json.search_findings }}\n\nNEWS AGENT FINDINGS:\n{{ $json.news_findings }}\n\nCOMPETITOR AND TREND AGENT FINDINGS:\n{{ $json.competitor_findings }}\n\nWrite a comprehensive research report with these exact sections:\n\n# MULTI-AGENT RESEARCH REPORT\nTopic: {{ $json.main_topic }}\nAgents Used: Orchestrator, Search, News, Competitor Trend, Analyst\n\n## EXECUTIVE SUMMARY\nWrite 3 to 4 sentences covering the most critical findings.\n\n## DEEP RESEARCH FINDINGS\nComprehensive facts from search agent with specific numbers.\n\n## LATEST NEWS AND DEVELOPMENTS\nCurrent developments from news agent.\n\n## COMPETITIVE LANDSCAPE AND MARKET TRENDS\nMarket intelligence from competitor agent.\n\n## TOP 7 KEY INSIGHTS\nMost valuable non-obvious insights as numbered list.\n\n## RISKS AND CHALLENGES\nMain risks and challenges identified.\n\n## OPPORTUNITIES AND RECOMMENDATIONS\n3 to 5 specific actionable opportunities.\n\n## KEY STATISTICS AT A GLANCE\n8 to 10 specific numbers and statistics.\n\n## WHAT TO WATCH NEXT\n4 to 5 things to monitor going forward.\n\nGenerated by Multi-Agent Research System — 5 AI Agents working in sequence.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [2200, 0],
+      "id": "v3-015",
+      "name": "Analyst Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [2200, 200],
+      "id": "v3-016",
+      "name": "Gemini — Analyst",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chat Trigger": {
+      "main": [[{ "node": "Validate Input", "type": "main", "index": 0 }]]
+    },
+    "Validate Input": {
+      "main": [[{ "node": "Orchestrator Agent", "type": "main", "index": 0 }]]
+    },
+    "Gemini — Orchestrator": {
+      "ai_languageModel": [[{ "node": "Orchestrator Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Orchestrator Agent": {
+      "main": [[{ "node": "Parse Plan", "type": "main", "index": 0 }]]
+    },
+    "Parse Plan": {
+      "main": [[{ "node": "Search Agent", "type": "main", "index": 0 }]]
+    },
+    "Gemini — Search": {
+      "ai_languageModel": [[{ "node": "Search Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Search Agent": {
+      "main": [[{ "node": "Store Search Data", "type": "main", "index": 0 }]]
+    },
+    "Store Search Data": {
+      "main": [[{ "node": "News Agent", "type": "main", "index": 0 }]]
+    },
+    "Gemini — News": {
+      "ai_languageModel": [[{ "node": "News Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "News Agent": {
+      "main": [[{ "node": "Store News Data", "type": "main", "index": 0 }]]
+    },
+    "Store News Data": {
+      "main": [[{ "node": "Competitor Trend Agent", "type": "main", "index": 0 }]]
+    },
+    "Gemini — Competitor": {
+      "ai_languageModel": [[{ "node": "Competitor Trend Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Competitor Trend Agent": {
+      "main": [[{ "node": "Collect All Research", "type": "main", "index": 0 }]]
+    },
+    "Collect All Research": {
+      "main": [[{ "node": "Analyst Agent", "type": "main", "index": 0 }]]
+    },
+    "Gemini — Analyst": {
+      "ai_languageModel": [[{ "node": "Analyst Agent", "type": "ai_languageModel", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "v3-final-2026",
+  "meta": { "templateCredsSetupCompleted": false },
+  "id": "MultiAgentResearchV3",
+  "tags": []
+}
